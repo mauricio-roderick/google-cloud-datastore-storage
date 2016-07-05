@@ -5,11 +5,17 @@
 	"required": true,
 	"help": "The project ID from the Google Developer's Console. E.g. 'purple-grape-123'."
   },
-  "key_filename": {
-	"label": "Key Filename",
+  "client_email": {
+	"label": "client_email",
 	"type": "String",
 	"required": true,
-	"help": "Full path to the a .json, .pem, or .p12 key downloaded from the Google Developers Console. NOTE: .pem and .p12 require you to specify config.email as well."
+	"help": ""
+  },
+  "private_key": {
+	"label": "private_key",
+	"type": "String",
+	"required": true,
+	"help": ""
   },
   "key": {
 	"label": "Key",

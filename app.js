@@ -1,7 +1,11 @@
 'use strict';
 
-var platform = require('./platform')
+var platform = require('./platform'),
 	gcloud = require('gcloud'),
+	async = require('async'),
+	isPlainObject = require('lodash.isplainobject'),
+	isArray = require('lodash.isarray'),
+	path = require('path'),
 	gcloudOptions,
 	connection;
 
@@ -10,14 +14,24 @@ let saveData = function (entity, done) {
 	connection.save({
 		key: gcloudOptions.key,
 		data: entity
-	}, done);
-}
+	}, (err) => {
+		if(! err) {
+			let insertedData = {
+				title: 'Entity successfuly saved to Google Cloud Datastore',
+				entity: entity
+			};
+
+			platform.log(JSON.stringify(insertedData));
+		}
+
+		done(err);
+	});
+};
 /**
  * Emitted when device data is received. This is the event to listen to in order to get real-time data feed from the connected devices.
  * @param {object} data The data coming from the device represented as JSON Object.
  */
 platform.on('data', function (data) {
-	// TODO: Insert the data to the database using the initialized connection.
 
 	if (isPlainObject(data)) {
 		saveData(data, (error) => {
@@ -26,7 +40,7 @@ platform.on('data', function (data) {
 	}
 	else if (isArray(data)) {
 		async.each(data, (datum, done) => {
-			sendData(datum, done);
+			saveData(datum, done);
 		}, (error) => {
 			if (error) platform.handleException(error);
 		});
@@ -40,20 +54,7 @@ platform.on('data', function (data) {
  * Emitted when the platform shuts down the plugin. The Storage should perform cleanup of the resources on this event.
  */
 platform.once('close', function () {
-	let d = require('domain').create();
-
-	d.once('error', function (error) {
-		console.error(error);
-		platform.handleException(error);
-		platform.notifyClose();
-		d.exit();
-	});
-
-	d.run(function () {
-		// TODO: Release all resources and close connections etc.
-		platform.notifyClose(); // Notify the platform that resources have been released.
-		d.exit();
-	});
+	platform.notifyClose();
 });
 
 /**
@@ -62,31 +63,27 @@ platform.once('close', function () {
  * @param {object} options The options or configuration injected by the platform to the plugin.
  */
 platform.once('ready', function (options) {
-	/*
-	 * Connect to the database or file storage service based on the options provided. See config.json
-	 *
-	 * Sample Parameters:
-	 *
-	 * Username = options.username
-	 * Password = options.password
-	 * Host = options.host
-	 * Port = options.port
-	 * Database = options.database
-	 * Table/Collection = options.table or options.collection
-	 *
-	 * Note: Option Names are based on what you specify on the config.json.
-	 */
+	let d = require('domain').create();
 
-	connection = gcloud.datastore({
-		projectId: options.project_id,
-		keyFilename: path.resolve(proccess.cwd(), './key-file.json')
+	d.once('error', (error) => {
+		platform.handleException(error);
+		platform.notifyClose();
+		d.exit();
 	});
 
-	options.key = connection.key(options.key);
-	gcloudOptions = options;
+	d.run(() => {
+		connection = gcloud.datastore({
+			projectId: options.project_id,
+			credentials: {
+				client_email: options.client_email,
+				private_key: options.private_key
+			}
+		});
 
-	// TODO: Initialize the connection to your database here.
-	
-	platform.notifyReady();
-	platform.log('Storage has been initialized.');
+		options.key = connection.key(options.key);
+		gcloudOptions = options;
+
+		platform.notifyReady();
+		platform.log('Google Cloud Datastore storage has been initialized.');
+	});
 });
